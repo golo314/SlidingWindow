@@ -154,19 +154,19 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
 
     cerr << "message = " << message[0] << endl;
 
-    sock.sendTo((char *)message, MSGSIZE / 4);
-
-    // Variable to say if we got a response
-    bool received = false;
+    sock.sendTo((char *)message, MSGSIZE);
 
     // Start timer
     timer.start();
+
+    // Variable to say if we got a response
+    bool received = false;
 
     // While no response
     while (!received) {
       // If we have a response
       if (sock.pollRecvFrom() > 0) {
-        sock.recvFrom((char *)&message[0], sizeof(int));
+        sock.recvFrom((char *)message, MSGSIZE);
         received = true;
       }
       // Else no response yet
@@ -174,9 +174,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
         // Check if we have a timeout
         if (timer.lap() > 1500) {
           // Resend the message
-          sock.sendTo((char *)message, MSGSIZE / 4);
-
-          cerr << "Retransmit:\t" << message[0] << endl;
+          sock.sendTo((char *)message, MSGSIZE);
 
           // Increment the number of retransmits
           resendCount++;
@@ -192,21 +190,19 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
 
 void serverReliable(UdpSocket &sock, const int max, int message[]) {
   cerr << "server: reliable test:" << endl;
-
+  
   // receive message[] max times
   for (int i = 0; i < max; i++) {
+    // While nothing received
+
     do {
       sock.recvFrom((char *)message, MSGSIZE);  // udp message receive
 
-      if (message[0] == i) {
-        sock.ackTo((char *)&i, sizeof(int));  // Send ack
-      }
-
     } while (message[0] != i);
 
-    // sock.ackTo((char *)&i, sizeof(int));  // Send ack
+    sock.ackTo((char *)&i, sizeof(int));  // Send ack
 
-    cerr << "Message:\t" << message[0] << endl;
+    cerr <<"Message:\t"<< message[0] << endl;
   }
 }
 
@@ -216,65 +212,70 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
 
   vector<int> sentId;
   int resendCount = 0;
-  Timer timer;
+  int response = -1;
+  for (int i = 0; i < max; i++) {
+    message[0] = i;
 
-  for (int i = 0; i < max;) {
-    do {
-      message[0] = i;
+    cerr << "message = " << message[0] << endl;
 
-      cerr << "message = " << message[0] << endl;
+    // Send a message
+    sock.sendTo((char *)message, MSGSIZE);
 
-      // Send a message
-      sock.sendTo((char *)message, MSGSIZE / 4);
-
-      // Add sequence # to list
-      sentId.push_back(i);
-
-      // If ack received
-      if (sock.pollRecvFrom() > 0) {
-        cerr << "I got something to read\n";
-        // Get ack segment number
-        sock.recvFrom((char *)&message[0], sizeof(int));
-
-        // Find the segment # in list
-        auto id = find(sentId.begin(), sentId.end(), message[0]);
-
-        // Remove segment # from list
-        sentId.erase(id);
-      }
-      i++;
-    } while (sentId.size() < windowSize);
-
-    Timer timer;
-    timer.start();
+    // Add sequence # to list
+    sentId.push_back(i);
 
     // Check if we reached send limit
-    while (sock.pollRecvFrom() < 1) {
-      // cerr<<"I dont got anything\n";
-      // Check if we have a timeout
-      if (timer.lap() > 1500) {
-        message[0] = sentId[0];
-        // Resend the message
-        sock.sendTo((char *)message, MSGSIZE / 4);
+    if (sentId.size() == windowSize) {
+      // Create and start timer
+      Timer timer;
+      timer.start();
 
-        cerr << "Retransmit:\t" << message[0] << endl;
+      // Variable to say if we got a response
+      bool received = false;
 
-        // Increment the number of retransmits
-        resendCount++;
+      // While no response
+      while (!received) {
+        // If we have a response
+        if (sock.pollRecvFrom() > 0) {
+          // Get ack segment number
+          sock.recvFrom((char *)&response, sizeof(response));
 
-        // Restart the timer
-        timer.start();
+          // Find the segment # in list
+          auto id = find(sentId.begin(), sentId.end(), response);
+
+          // Remove segment # from list
+          sentId.erase(id);
+
+          received = true;
+        }
+        // Else no response yet
+        else {
+          // Check if we have a timeout
+          if (timer.lap() > 1500) {
+            // Resend the message
+            sock.sendTo((char *)message, MSGSIZE);
+
+            // Increment the number of retransmits
+            resendCount++;
+
+            // Restart the timer
+            timer.start();
+          }
+        }
       }
     }
 
-    // Get ack segment number
-    sock.recvFrom((char *)&message[0], sizeof(int));
+    // If ack received
+    if (sock.pollRecvFrom() > 0) {
+      // Get ack segment number
+      sock.recvFrom((char *)&response, sizeof(response));
 
-    // Find the segment # in list
-    auto id = find(sentId.begin(), sentId.end(), message[0]);
+      // Find the segment # in list
+      auto id = find(sentId.begin(), sentId.end(), response);
 
-    // Remove segment # from list
-    sentId.erase(id);
+      // Remove segment # from list
+      sentId.erase(id);
+    }
   }
   return resendCount;
 }
@@ -287,19 +288,19 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   int lastReceived = -1, lastAck = 0;
 
   // receive message[] max times
-  for (int i = 0; i < max; i++) {
-    // While nothing received
-    while (sock.pollRecvFrom() < 1) {
-      // Do nothing
-    }
+  for (int i = 0; i < max; ) {
 
-    sock.recvFrom((char *)message, MSGSIZE);  // udp message receive
+      if(sock.pollRecvFrom()>0){
+    sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
     lastReceived = message[0];
+      
+      cerr<<"Got a message\n";
 
     if ((lastReceived - lastAck) <= windowSize) {
       if (!received[lastReceived]) {
         received[lastReceived] = true;
-        lastAck = lastReceived;
+          i++;
+        //lastAck = lastReceived;
       }
       int index = 0;
       while (received[index]) {
@@ -307,16 +308,11 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
       }
       lastAck = (index < lastReceived) ? index : lastReceived;
 
-      sock.sendTo((char *)&lastAck, sizeof(int));
+      sock.sendTo((char *)&lastAck, sizeof(lastAck));
       cerr << "Ack sent:\t" << lastAck << endl;
-    } else {
-      i--;
     }
 
     cerr << "Message:\t" << message[0] << endl;  // print out message
   }
+  }
 }
-
-// clang-format -style=Google -i hw2.cpp
-// g++ UdpSocket.cpp Timer.cpp hw2.cpp -o hw2
-// cd School/Aut\ 18/CS\ 432/hw2/
