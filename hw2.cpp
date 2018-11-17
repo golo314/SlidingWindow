@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
           retransmits = clientSlidingWindow(sock, MAX, message,
                                             windowSize);  // actual test
           cerr << "Window size = ";                       // lap timer
-          cerr << windowSize << " ";
+          cerr << windowSize << " " << endl;
           cerr << "Elasped time = ";
           cerr << timer.lap() << endl;
           cerr << "retransmits = " << retransmits << endl;
@@ -218,33 +218,46 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
   int segment = 0;
 
   do {
-    message[0] = segment;
+    while (sentId.size() < windowSize) {
+      message[0] = segment;
+      sentId.push_back(message[0]);
+      segment++;
+      cerr << "Message:\t" << message[0] << endl;
 
-    cerr << "Message:\t" << segment << endl;
+      sock.sendTo((char *)message, MSGSIZE / 4);
 
-    sock.sendTo((char *)message, MSGSIZE / 4);
-
-    if (sock.pollRecvFrom() > 0) {
-      sock.recvFrom((char *)&message[0], sizeof(int));
-      auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
-      sentId.erase(sentId.begin(), segmentAck);
-    }
-
-    if (sentId.size() == windowSize) {
-      timer.start();
-      while (sock.pollRecvFrom() < 1) {
-        if (timer.lap() >= 1500) {
-          sock.sendTo((char *)message, MSGSIZE / 4);
-          cerr << "Retransmit:\t" << message[0] << endl;
-          resendCount++;
-          timer.start();
+      if (sock.pollRecvFrom() > 0) {
+        sock.recvFrom((char *)&message[0], sizeof(int));
+        if (message[0] >= sentId[0]) {
+          auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
+          if (segmentAck == sentId.begin()) {
+            sentId.erase(segmentAck);
+          } else {
+            sentId.erase(sentId.begin(), segmentAck);
+          }
         }
       }
-      sock.recvFrom((char *)&message[0], sizeof(int));
-      auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
-      sentId.erase(sentId.begin(), segmentAck);
     }
-    segment++;
+
+    timer.start();
+    while (sock.pollRecvFrom() < 1) {
+      if (timer.lap() >= 1500) {
+        message[0] = sentId[0];
+        sock.sendTo((char *)message, MSGSIZE / 4);
+        cerr << "Retransmit:\t" << message[0] << endl;
+        resendCount++;
+        timer.start();
+      }
+    }
+    sock.recvFrom((char *)&message[0], sizeof(int));
+    if (message[0] >= sentId[0]) {
+      auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
+      if (segmentAck == sentId.begin()) {
+        sentId.erase(segmentAck);
+      } else {
+        sentId.erase(sentId.begin(), segmentAck);
+      }
+    }
 
   } while (segment < max);
 
@@ -271,8 +284,9 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
           lastAck++;
         }
         lastAck = (lastAck < lastReceived) ? lastAck : lastReceived;
+        
+        sock.ackTo((char *)&lastAck, sizeof(lastAck));
 
-        sock.sendTo((char *)&lastAck, sizeof(lastAck));
         cerr << "Ack sent:\t" << lastAck << endl;
       }
 
