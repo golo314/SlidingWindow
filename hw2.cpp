@@ -75,8 +75,9 @@ int main(int argc, char *argv[]) {
       case 3:
         for (int windowSize = 1; windowSize <= MAXWIN; windowSize++) {
           timer.start();  // start timer
-          retransmits = clientSlidingWindow(sock, MAX, message, windowSize);
-          cerr << "Window size = ";  // lap timer
+          retransmits = clientSlidingWindow(sock, MAX, message,
+                                            windowSize);  // actual test
+          cerr << "Window size = ";                       // lap timer
           cerr << windowSize << " ";
           cerr << "Elasped time = ";
           cerr << timer.lap() << endl;
@@ -204,7 +205,7 @@ void serverReliable(UdpSocket &sock, const int max, int message[]) {
 
     sock.ackTo((char *)&i, sizeof(int));  // Send ack
 
-    cerr <<"Message:\t"<< message[0] << endl;
+    cerr << "Message:\t" << message[0] << endl;
   }
 }
 
@@ -259,30 +260,28 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   int lastReceived = -1, lastAck = 0;
 
   // receive message[] max times
-  for (int i = 0; i < max; ) {
+  for (int i = 0; i < max;) {
+    if (sock.pollRecvFrom() > 0) {
+      sock.recvFrom((char *)message, MSGSIZE / 4);  // udp message receive
+      lastReceived = message[0];
 
-    if(sock.pollRecvFrom()>0){
-    sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
-    lastReceived = message[0];
-
-      cerr<<"Got a message\n";
-
-    if ((lastReceived - lastAck) < windowSize) {
-      if (!received[lastReceived]) {
-        received[lastReceived] = true;
+      if ((lastReceived - lastAck) < windowSize) {
+        if (!received[lastReceived]) {
+          received[lastReceived] = true;
           i++;
-      }
-      int index = 0;
-      while (received[index]) {
-        index++;
-      }
-      lastAck = (index < lastReceived) ? index : lastReceived;
+          // lastAck = lastReceived;
+        }
+        int index = 0;
+        while (received[index]) {
+          index++;
+        }
+        lastAck = (index < lastReceived) ? index : lastReceived;
 
-      sock.sendTo((char *)&lastAck, sizeof(lastAck));
-      cerr << "Ack sent:\t" << lastAck << endl;
+        sock.sendTo((char *)&lastAck, sizeof(lastAck));
+        cerr << "Ack sent:\t" << lastAck << endl;
+      }
+
+      cerr << "Message:\t" << message[0] << endl;  // print out message
     }
-
-    cerr << "Message:\t" << message[0] << endl;  // print out message
-  }
   }
 }
