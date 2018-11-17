@@ -175,6 +175,8 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
         if (timer.lap() > 1500) {
           // Resend the message
           sock.sendTo((char *)message, MSGSIZE/4);
+          
+          cerr << "Retransmit:\t" << message[0] << endl;
 
           // Increment the number of retransmits
           resendCount++;
