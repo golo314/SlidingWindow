@@ -272,7 +272,6 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   int lastReceived = -1, lastAck = 0;
 
   do {
-    //if (sock.pollRecvFrom() > 0) {
       sock.recvFrom((char *)message, MSGSIZE / 4);  // udp message receive
       lastReceived = message[0];
 
@@ -291,7 +290,6 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
       }
 
       cerr << "Message:\t" << message[0] << endl;  // print out message
-    //}
 
   } while (lastAck+1 < max);
 }
