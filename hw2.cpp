@@ -155,7 +155,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
 
     cerr << "message = " << message[0] << endl;
 
-    sock.sendTo((char *)message, MSGSIZE/4);
+    sock.sendTo((char *)message, MSGSIZE / 4);
 
     // Variable to say if we got a response
     bool received = false;
@@ -175,7 +175,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
         // Check if we have a timeout
         if (timer.lap() > 1500) {
           // Resend the message
-          sock.sendTo((char *)message, MSGSIZE/4);
+          sock.sendTo((char *)message, MSGSIZE / 4);
 
           cerr << "Retransmit:\t" << message[0] << endl;
 
@@ -196,10 +196,9 @@ void serverReliable(UdpSocket &sock, const int max, int message[]) {
 
   // receive message[] max times
   for (int i = 0; i < max; i++) {
-
     // While nothing received
     do {
-      sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
+      sock.recvFrom((char *)message, MSGSIZE / 4);  // udp message receive
 
     } while (message[0] != i);
 
@@ -259,8 +258,7 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   bool received[MAX] = {false};
   int lastReceived = -1, lastAck = 0;
 
-  // receive message[] max times
-  for (int i = 0; i < max;) {
+  do {
     if (sock.pollRecvFrom() > 0) {
       sock.recvFrom((char *)message, MSGSIZE / 4);  // udp message receive
       lastReceived = message[0];
@@ -268,14 +266,11 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
       if ((lastReceived - lastAck) < windowSize) {
         if (!received[lastReceived]) {
           received[lastReceived] = true;
-          i++;
-          // lastAck = lastReceived;
         }
-        int index = 0;
-        while (received[index]) {
-          index++;
+        while (received[lastAck]) {
+          lastAck++;
         }
-        lastAck = (index < lastReceived) ? index : lastReceived;
+        lastAck = (lastAck < lastReceived) ? lastAck : lastReceived;
 
         sock.sendTo((char *)&lastAck, sizeof(lastAck));
         cerr << "Ack sent:\t" << lastAck << endl;
@@ -283,5 +278,6 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
 
       cerr << "Message:\t" << message[0] << endl;  // print out message
     }
-  }
+
+  } while (lastAck < max);
 }
