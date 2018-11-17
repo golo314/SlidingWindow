@@ -284,8 +284,9 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
           lastAck++;
         }
         lastAck = (lastAck < lastReceived) ? lastAck : lastReceived;
-
+        
         sock.ackTo((char *)&lastAck, sizeof(lastAck));
+
         cerr << "Ack sent:\t" << lastAck << endl;
       }
 
