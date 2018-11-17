@@ -154,7 +154,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
 
     cerr << "message = " << message[0] << endl;
 
-    sock.sendTo((char *)message, MSGSIZE / 4);
+    sock.sendTo((char *)message, MSGSIZE/4);
 
     // Variable to say if we got a response
     bool received = false;
@@ -174,7 +174,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
         // Check if we have a timeout
         if (timer.lap() > 1500) {
           // Resend the message
-          sock.sendTo((char *)message, MSGSIZE / 4);
+          sock.sendTo((char *)message, MSGSIZE/4);
 
           cerr << "Retransmit:\t" << message[0] << endl;
 
@@ -195,18 +195,16 @@ void serverReliable(UdpSocket &sock, const int max, int message[]) {
 
   // receive message[] max times
   for (int i = 0; i < max; i++) {
-    do {
-      sock.recvFrom((char *)message, MSGSIZE);  // udp message receive
 
-      if (message[0] == i) {
-        sock.ackTo((char *)&i, sizeof(int));  // Send ack
-      }
+    // While nothing received
+    do {
+      sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
 
     } while (message[0] != i);
 
-    // sock.ackTo((char *)&i, sizeof(int));  // Send ack
+    sock.ackTo((char *)&i, sizeof(int));  // Send ack
 
-    cerr << "Message:\t" << message[0] << endl;
+    cerr <<"Message:\t"<< message[0] << endl;
   }
 }
 
@@ -235,7 +233,7 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
     if (sentId.size() == windowSize) {
       timer.start();
       while (sock.pollRecvFrom() < 1) {
-        if (timer.lap() == 1500) {
+        if (timer.lap() >= 1500) {
           sock.sendTo((char *)message, MSGSIZE / 4);
           cerr << "Retransmit:\t" << message[0] << endl;
           resendCount++;
@@ -246,7 +244,6 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
       auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
       sentId.erase(sentId.begin(), segmentAck);
     }
-
     segment++;
 
   } while (segment < max);
@@ -262,19 +259,18 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   int lastReceived = -1, lastAck = 0;
 
   // receive message[] max times
-  for (int i = 0; i < max; i++) {
-    // While nothing received
-    while (sock.pollRecvFrom() < 1) {
-      // Do nothing
-    }
+  for (int i = 0; i < max; ) {
 
-    sock.recvFrom((char *)message, MSGSIZE);  // udp message receive
+    if(sock.pollRecvFrom()>0){
+    sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
     lastReceived = message[0];
 
-    if ((lastReceived - lastAck) <= windowSize) {
+      cerr<<"Got a message\n";
+
+    if ((lastReceived - lastAck) < windowSize) {
       if (!received[lastReceived]) {
         received[lastReceived] = true;
-        lastAck = lastReceived;
+          i++;
       }
       int index = 0;
       while (received[index]) {
@@ -282,16 +278,11 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
       }
       lastAck = (index < lastReceived) ? index : lastReceived;
 
-      sock.sendTo((char *)&lastAck, sizeof(int));
+      sock.sendTo((char *)&lastAck, sizeof(lastAck));
       cerr << "Ack sent:\t" << lastAck << endl;
-    } else {
-      i--;
     }
 
     cerr << "Message:\t" << message[0] << endl;  // print out message
   }
+  }
 }
-
-// clang-format -style=Google -i hw2.cpp
-// g++ UdpSocket.cpp Timer.cpp hw2.cpp -o hw2
-// cd School/Aut\ 18/CS\ 432/hw2/
