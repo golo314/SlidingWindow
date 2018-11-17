@@ -154,7 +154,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
 
     cerr << "message = " << message[0] << endl;
 
-    sock.sendTo((char *)message, MSGSIZE);
+    sock.sendTo((char *)message, MSGSIZE/4);
     
     // Variable to say if we got a response
     bool received = false; 
@@ -166,7 +166,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
     while (!received) {
       // If we have a response
       if (sock.pollRecvFrom() > 0) {
-        sock.recvFrom((char *)message, MSGSIZE);
+        sock.recvFrom((char *)&message[0], sizeof(int));
         received = true;
       }
       // Else no response yet
@@ -174,7 +174,7 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
         // Check if we have a timeout
         if (timer.lap() > 1500) {
           // Resend the message
-          sock.sendTo((char *)message, MSGSIZE);
+          sock.sendTo((char *)message, MSGSIZE/4);
 
           // Increment the number of retransmits
           resendCount++;
@@ -196,7 +196,7 @@ void serverReliable(UdpSocket &sock, const int max, int message[]) {
     
     // While nothing received
     do {
-      sock.recvFrom((char *)message, MSGSIZE);  // udp message receive
+      sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
 
     } while (message[0] != i);
 
@@ -219,7 +219,7 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
     cerr << "message = " << message[0] << endl;
 
     // Send a message
-    sock.sendTo((char *)message, MSGSIZE);
+    sock.sendTo((char *)message, MSGSIZE/4);
 
     // Add sequence # to list
     sentId.push_back(i);
@@ -253,7 +253,7 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
           // Check if we have a timeout
           if (timer.lap() > 1500) {
             // Resend the message
-            sock.sendTo((char *)message, MSGSIZE);
+            sock.sendTo((char *)message, MSGSIZE/4);
 
             // Increment the number of retransmits
             resendCount++;
