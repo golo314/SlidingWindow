@@ -155,12 +155,12 @@ int clientStopWait(UdpSocket &sock, const int max, int message[]) {
     cerr << "message = " << message[0] << endl;
 
     sock.sendTo((char *)message, MSGSIZE);
+    
+    // Variable to say if we got a response
+    bool received = false; 
 
     // Start timer
     timer.start();
-
-    // Variable to say if we got a response
-    bool received = false;
 
     // While no response
     while (!received) {
@@ -193,8 +193,8 @@ void serverReliable(UdpSocket &sock, const int max, int message[]) {
   
   // receive message[] max times
   for (int i = 0; i < max; i++) {
+    
     // While nothing received
-
     do {
       sock.recvFrom((char *)message, MSGSIZE);  // udp message receive
 
@@ -290,17 +290,16 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   // receive message[] max times
   for (int i = 0; i < max; ) {
 
-      if(sock.pollRecvFrom()>0){
+    if(sock.pollRecvFrom()>0){
     sock.recvFrom((char *)message, MSGSIZE/4);  // udp message receive
     lastReceived = message[0];
       
       cerr<<"Got a message\n";
 
-    if ((lastReceived - lastAck) <= windowSize) {
+    if ((lastReceived - lastAck) < windowSize) {
       if (!received[lastReceived]) {
         received[lastReceived] = true;
           i++;
-        //lastAck = lastReceived;
       }
       int index = 0;
       while (received[index]) {
