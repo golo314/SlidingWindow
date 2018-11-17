@@ -73,16 +73,15 @@ int main(int argc, char *argv[]) {
         cerr << "retransmits = " << retransmits << endl;
         break;
       case 3:
-        // for (int windowSize = 1; windowSize <= MAXWIN; windowSize++) {
-        timer.start();  // start timer
-        retransmits = clientSlidingWindow(sock, MAX, message, 1);
-        // windowSize);  // actual test
-        // cerr << "Window size = ";                       // lap timer
-        // cerr << windowSize << " ";
-        cerr << "Elasped time = ";
-        cerr << timer.lap() << endl;
-        cerr << "retransmits = " << retransmits << endl;
-        //}
+        for (int windowSize = 1; windowSize <= MAXWIN; windowSize++) {
+          timer.start();  // start timer
+          retransmits = clientSlidingWindow(sock, MAX, message, windowSize);
+          cerr << "Window size = ";  // lap timer
+          cerr << windowSize << " ";
+          cerr << "Elasped time = ";
+          cerr << timer.lap() << endl;
+          cerr << "retransmits = " << retransmits << endl;
+        }
         break;
       default:
         cerr << "no such test case" << endl;
@@ -98,8 +97,9 @@ int main(int argc, char *argv[]) {
         serverReliable(sock, MAX, message);
         break;
       case 3:
-        // for (int windowSize = 1; windowSize <= MAXWIN; windowSize++)
-        serverEarlyRetrans(sock, MAX, message, 1);
+        for (int windowSize = 1; windowSize <= MAXWIN; windowSize++) {
+          serverEarlyRetrans(sock, MAX, message, windowSize);
+        }
         break;
       default:
         cerr << "no such test case" << endl;
@@ -217,65 +217,40 @@ int clientSlidingWindow(UdpSocket &sock, const int max, int message[],
   vector<int> sentId;
   int resendCount = 0;
   Timer timer;
+  int segment = 0;
 
-  for (int i = 0; i < max;) {
-    do {
-      message[0] = i;
+  do {
+    message[0] = segment;
 
-      cerr << "message = " << message[0] << endl;
+    cerr << "Message:\t" << segment << endl;
 
-      // Send a message
-      sock.sendTo((char *)message, MSGSIZE / 4);
+    sock.sendTo((char *)message, MSGSIZE / 4);
 
-      // Add sequence # to list
-      sentId.push_back(i);
-
-      // If ack received
-      if (sock.pollRecvFrom() > 0) {
-        cerr << "I got something to read\n";
-        // Get ack segment number
-        sock.recvFrom((char *)&message[0], sizeof(int));
-
-        // Find the segment # in list
-        auto id = find(sentId.begin(), sentId.end(), message[0]);
-
-        // Remove segment # from list
-        sentId.erase(id);
-      }
-      i++;
-    } while (sentId.size() < windowSize);
-
-    Timer timer;
-    timer.start();
-
-    // Check if we reached send limit
-    while (sock.pollRecvFrom() < 1) {
-      // cerr<<"I dont got anything\n";
-      // Check if we have a timeout
-      if (timer.lap() > 1500) {
-        message[0] = sentId[0];
-        // Resend the message
-        sock.sendTo((char *)message, MSGSIZE / 4);
-
-        cerr << "Retransmit:\t" << message[0] << endl;
-
-        // Increment the number of retransmits
-        resendCount++;
-
-        // Restart the timer
-        timer.start();
-      }
+    if (sock.pollRecvFrom() > 0) {
+      sock.recvFrom((char *)&message[0], sizeof(int));
+      auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
+      sentId.erase(sentId.begin(), segmentAck);
     }
 
-    // Get ack segment number
-    sock.recvFrom((char *)&message[0], sizeof(int));
+    if (sentId.size() == windowSize) {
+      timer.start();
+      while (sock.pollRecvFrom() < 1) {
+        if (timer.lap() == 1500) {
+          sock.sendTo((char *)message, MSGSIZE / 4);
+          cerr << "Retransmit:\t" << message[0] << endl;
+          resendCount++;
+          timer.start();
+        }
+      }
+      sock.recvFrom((char *)&message[0], sizeof(int));
+      auto segmentAck = find(sentId.begin(), sentId.end(), message[0]);
+      sentId.erase(sentId.begin(), segmentAck);
+    }
 
-    // Find the segment # in list
-    auto id = find(sentId.begin(), sentId.end(), message[0]);
+    segment++;
 
-    // Remove segment # from list
-    sentId.erase(id);
-  }
+  } while (segment < max);
+
   return resendCount;
 }
 
