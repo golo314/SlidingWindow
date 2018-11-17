@@ -259,11 +259,11 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
   int lastReceived = -1, lastAck = 0;
 
   do {
-    if (sock.pollRecvFrom() > 0) {
+    //if (sock.pollRecvFrom() > 0) {
       sock.recvFrom((char *)message, MSGSIZE / 4);  // udp message receive
       lastReceived = message[0];
 
-      if ((lastReceived - lastAck) < windowSize) {
+      if ((lastReceived - lastAck) <= windowSize) {
         if (!received[lastReceived]) {
           received[lastReceived] = true;
         }
@@ -272,12 +272,12 @@ void serverEarlyRetrans(UdpSocket &sock, const int max, int message[],
         }
         lastAck = (lastAck < lastReceived) ? lastAck : lastReceived;
 
-        sock.sendTo((char *)&lastAck, sizeof(lastAck));
+        sock.ackTo((char *)&lastAck, sizeof(lastAck));
         cerr << "Ack sent:\t" << lastAck << endl;
       }
 
       cerr << "Message:\t" << message[0] << endl;  // print out message
-    }
+    //}
 
-  } while (lastAck < max);
+  } while (lastAck+1 < max);
 }
